@@ -2,35 +2,23 @@ package com.cires.ciresbackend.controller;
 
 import com.cires.ciresbackend.entity.User;
 import com.cires.ciresbackend.service.UserService;
-import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
-import java.util.List;
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PostMapping;
 
-@RestController
-@RequestMapping("/api/users")
-@RequiredArgsConstructor
-@CrossOrigin("*")
+@Controller
 public class UserController {
 
-    private final UserService service;
+    private final UserService userService;
 
-    @GetMapping
-    public List<User> getAll() {
-        return service.getAllUsers();
+    public UserController(UserService userService) {
+        this.userService = userService;
     }
 
-    @PostMapping
-    public User register(@RequestBody User user) {
-        return service.createUser(user);
-    }
-
-    @GetMapping("/{id}")
-    public User getById(@PathVariable Long id) {
-        return service.getUserById(id);
-    }
-
-    @DeleteMapping("/{id}")
-    public void delete(@PathVariable Long id) {
-        service.deleteUser(id);
+    @PostMapping("/register/save") // Must match register.html action
+    public String registerUser(@ModelAttribute User user) {
+        // Use the registerCitizen method which has the encoding logic
+        userService.registerCitizen(user);
+        return "redirect:/login?success";
     }
 }

@@ -1,32 +1,49 @@
 package com.cires.ciresbackend.service;
 
+import com.cires.ciresbackend.entity.Role;
 import com.cires.ciresbackend.entity.User;
+import com.cires.ciresbackend.repository.RoleRepository;
 import com.cires.ciresbackend.repository.UserRepository;
-import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 public class UserService {
 
-    private final UserRepository repository;
+    private static final Logger logger = LoggerFactory.getLogger(UserService.class);
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final PasswordEncoder passwordEncoder;
 
-    public List<User> getAllUsers() {
-        return repository.findAll();
+    public UserService(UserRepository userRepository, RoleRepository roleRepository, PasswordEncoder passwordEncoder) {
+        this.userRepository = userRepository;
+        this.roleRepository = roleRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
-    public User createUser(User user) {
-        // Here you could add logic to check if the email already exists
-        return repository.save(user);
-    }
+    public void registerCitizen(User user) {
+        try {
+            logger.info("Starting registration for: {}", user.getUsername());
 
-    public User getUserById(Long id) {
-        return repository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
-    }
+            // Encrypt password
+            user.setPassword(passwordEncoder.encode(user.getPassword()));
+            
+            // Set default CITIZEN role
+            Role citizenRole = roleRepository.findByRoleName("CITIZEN")
+                    .orElseGet(() -> {
+                        Role role = new Role();
+                        role.setRoleName("CITIZEN");
+                        return roleRepository.save(role);
+                    });
+            user.setRole(citizenRole);
 
-    public void deleteUser(Long id) {
-        repository.deleteById(id);
+            userRepository.save(user);
+            logger.info("Registration successful for: {}", user.getUsername());
+        } catch (Exception e) {
+            logger.error("Registration failed for: {}", user.getUsername(), e);
+            throw e;
+        }
     }
 }
