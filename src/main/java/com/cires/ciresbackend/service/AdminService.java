@@ -20,6 +20,11 @@ public class AdminService {
     private final RoleRepository roleRepository;
     private final SlaConfigRepository slaConfigRepository;
     private final CategoryRepository categoryRepository;
+    private final ProvinceRepository provinceRepository;
+    private final DistrictRepository districtRepository;
+    private final SectorRepository sectorRepository;
+    private final CellRepository cellRepository;
+    private final VillageRepository villageRepository;
 
     public List<UserResponseDTO> getAllUsers() {
         return userRepository.findAll().stream().map(user -> {
@@ -44,8 +49,71 @@ public class AdminService {
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
         user.setRole(role);
+
+        // Always clear previous geography before assigning the new leadership scope.
+        user.setProvince(null);
+        user.setDistrict(null);
+        user.setSector(null);
+        user.setCell(null);
+        user.setVillage(null);
+
+        if (request.getLevelType() == null || request.getLevelType().trim().isEmpty()) {
+            user.setLevelType(User.UserLevelType.CITIZEN);
+            userRepository.save(user);
+            return "User role updated successfully";
+        }
+
+        User.UserLevelType levelType;
+        try {
+            levelType = User.UserLevelType.valueOf(request.getLevelType().trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new RuntimeException("Invalid level type");
+        }
+
+        switch (levelType) {
+            case PROVINCE_GOVERNOR -> {
+                Province province = provinceRepository.findById(requireLocationId(request.getLocationId()))
+                        .orElseThrow(() -> new RuntimeException("Province not found"));
+                user.setProvince(province);
+                user.setLevelType(User.UserLevelType.PROVINCE_GOVERNOR);
+            }
+            case DISTRICT_MAYOR -> {
+                District district = districtRepository.findById(requireLocationId(request.getLocationId()))
+                        .orElseThrow(() -> new RuntimeException("District not found"));
+                user.setDistrict(district);
+                user.setLevelType(User.UserLevelType.DISTRICT_MAYOR);
+            }
+            case SECTOR_LEADER -> {
+                Sector sector = sectorRepository.findById(requireLocationId(request.getLocationId()))
+                        .orElseThrow(() -> new RuntimeException("Sector not found"));
+                user.setSector(sector);
+                user.setLevelType(User.UserLevelType.SECTOR_LEADER);
+            }
+            case CELL_LEADER -> {
+                Cell cell = cellRepository.findById(requireLocationId(request.getLocationId()))
+                        .orElseThrow(() -> new RuntimeException("Cell not found"));
+                user.setCell(cell);
+                user.setLevelType(User.UserLevelType.CELL_LEADER);
+            }
+            case VILLAGE_LEADER -> {
+                Village village = villageRepository.findById(requireLocationId(request.getLocationId()))
+                        .orElseThrow(() -> new RuntimeException("Village not found"));
+                user.setVillage(village);
+                user.setLevelType(User.UserLevelType.VILLAGE_LEADER);
+            }
+            case NATIONAL_ADMIN, CITIZEN -> user.setLevelType(levelType);
+            default -> throw new RuntimeException("Unsupported level type");
+        }
+
         userRepository.save(user);
         return "User role updated successfully";
+    }
+
+    private Long requireLocationId(Long locationId) {
+        if (locationId == null) {
+            throw new RuntimeException("locationId is required for this level type");
+        }
+        return locationId;
     }
 
     @Transactional
