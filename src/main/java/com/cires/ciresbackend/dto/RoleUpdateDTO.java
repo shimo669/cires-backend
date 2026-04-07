@@ -8,5 +8,6 @@ import lombok.*;
 @AllArgsConstructor
 public class RoleUpdateDTO {
     private String roleName;
+    private String levelType;
+    private Long locationId;
 }
-
