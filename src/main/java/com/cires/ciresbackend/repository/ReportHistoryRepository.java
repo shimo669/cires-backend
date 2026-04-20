@@ -6,6 +6,7 @@ import java.util.List;
 
 public interface ReportHistoryRepository extends JpaRepository<ReportHistory, Long> {
     List<ReportHistory> findByReportId(Long reportId);
+    List<ReportHistory> findByReportIdOrderByActionTimestampDesc(Long reportId);
     List<ReportHistory> findByActedById(Long userId);
     List<ReportHistory> findByAction(String action);
 }

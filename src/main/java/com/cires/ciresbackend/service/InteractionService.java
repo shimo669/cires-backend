@@ -2,6 +2,9 @@ package com.cires.ciresbackend.service;
 
 import com.cires.ciresbackend.dto.FeedbackRequestDTO;
 import com.cires.ciresbackend.dto.HistoryResponseDTO;
+import com.cires.ciresbackend.exception.ForbiddenActionException;
+import com.cires.ciresbackend.exception.InvalidRequestException;
+import com.cires.ciresbackend.exception.ResourceNotFoundException;
 import com.cires.ciresbackend.entity.*;
 import com.cires.ciresbackend.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -19,15 +22,21 @@ public class InteractionService {
     private final UserRepository userRepository;
 
     public void submitFeedback(Long reportId, FeedbackRequestDTO request, String username) {
-        Report report = reportRepository.findById(reportId).orElseThrow();
-        User user = userRepository.findByUsername(username).orElseThrow();
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new ResourceNotFoundException("Report not found"));
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
         if (report.getReporter() == null || !report.getReporter().getId().equals(user.getId())) {
-            throw new RuntimeException("Only the reporter can submit feedback");
+            throw new ForbiddenActionException("Only the reporter can submit feedback");
         }
 
         if (!"RESOLVED".equalsIgnoreCase(report.getStatus())) {
-            throw new RuntimeException("Feedback can only be submitted after reporter confirmation");
+            throw new InvalidRequestException("Feedback can only be submitted after reporter confirmation");
+        }
+
+        if (request.getRating() == null || request.getRating() < 1 || request.getRating() > 5) {
+            throw new InvalidRequestException("Rating must be between 1 and 5");
         }
 
         Feedback feedback = feedbackRepository.findByReportId(reportId).orElseGet(Feedback::new);
@@ -41,7 +50,7 @@ public class InteractionService {
     }
 
     public List<HistoryResponseDTO> getReportHistory(Long reportId) {
-        return historyRepository.findByReportId(reportId).stream().map(history -> {
+        return historyRepository.findByReportIdOrderByActionTimestampDesc(reportId).stream().map(history -> {
             HistoryResponseDTO dto = new HistoryResponseDTO();
             dto.setAction(history.getAction());
             dto.setNotes(history.getNotes());

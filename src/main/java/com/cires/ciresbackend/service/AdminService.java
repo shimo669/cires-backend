@@ -12,6 +12,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
@@ -128,7 +130,12 @@ public class AdminService {
     }
 
     public List<ReportDTO> getAllReports() {
-        return reportRepository.findAll().stream().map(this::toReportDTO).collect(Collectors.toList());
+        List<Report> reports = reportRepository.findAll();
+        List<Long> reportIds = reports.stream().map(Report::getId).toList();
+        Map<Long, Feedback> feedbackByReportId = feedbackRepository.findByReportIdIn(reportIds).stream()
+                .collect(Collectors.toMap(feedback -> feedback.getReport().getId(), Function.identity(), (a, b) -> a));
+
+        return reports.stream().map(report -> toReportDTO(report, feedbackByReportId.get(report.getId()))).collect(Collectors.toList());
     }
 
     private Long requireLocationId(Long locationId) {
@@ -151,7 +158,7 @@ public class AdminService {
         return dto;
     }
 
-    private ReportDTO toReportDTO(Report report) {
+    private ReportDTO toReportDTO(Report report, Feedback feedback) {
         ReportDTO dto = new ReportDTO();
         dto.setId(report.getId());
         dto.setTitle(report.getTitle());
@@ -165,12 +172,12 @@ public class AdminService {
         dto.setIncidentLocationName(report.getIncidentVillage().getName() + " Village");
         dto.setCreatedAt(report.getCreatedAt());
         dto.setSlaDeadline(report.getSlaDeadline());
-        feedbackRepository.findByReportId(report.getId()).ifPresent(feedback -> {
+        if (feedback != null) {
             dto.setReporterApproved(feedback.getApproved());
             dto.setServiceRating(feedback.getRating());
             dto.setServiceComment(feedback.getComment());
             dto.setReporterConfirmedAt(feedback.getConfirmedAt());
-        });
+        }
         dto.setReporterConfirmationRequired("PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus()));
         return dto;
     }
