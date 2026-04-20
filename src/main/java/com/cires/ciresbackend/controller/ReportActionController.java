@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -21,7 +22,8 @@ public class ReportActionController {
     @PreAuthorize("hasRole('LEADER') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<?>> resolveReport(@PathVariable Long reportId) {
         try {
-            reportActionService.resolveReport(reportId);
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            reportActionService.resolveReport(reportId, username);
             return ResponseEntity.ok(new ApiResponse<>(200, "Report resolved successfully"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -36,7 +38,8 @@ public class ReportActionController {
     @PreAuthorize("hasRole('LEADER') or hasRole('ADMIN')")
     public ResponseEntity<ApiResponse<?>> escalateReport(@PathVariable Long reportId) {
         try {
-            reportService.escalateReport(reportId);
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            reportService.escalateReport(reportId, username);
             return ResponseEntity.ok(new ApiResponse<>(200, "Report escalated successfully"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND)

@@ -9,5 +9,6 @@ import lombok.*;
 public class RoleUpdateDTO {
     private String roleName;
     private String levelType;
+    private String locationType;
     private Long locationId;
 }

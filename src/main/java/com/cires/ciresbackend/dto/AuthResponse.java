@@ -12,5 +12,8 @@ public class AuthResponse {
     private String role;
     private String email;
     private String nationalId;
+    private Long locationId;
+    private String locationName;
+    private String fullRwandanAddress;
 }
 

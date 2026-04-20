@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 
 import java.io.InputStream;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Configuration
 public class DataSeeder {
@@ -39,65 +40,94 @@ public class DataSeeder {
             }
 
             // --- PHASE 2: SEED GEOGRAPHY ---
-            if (provinceRepo.count() == 0) {
-                System.out.println("Seeding strict geographic data from locations.json...");
-                ObjectMapper mapper = new ObjectMapper();
+            System.out.println("Seeding geographic data from locations.json...");
+            ObjectMapper mapper = new ObjectMapper();
 
-                // Note: Ensure the file path matches your resource location
-                // Standard location is src/main/resources/locations.json
-                TypeReference<List<Map<String, Object>>> typeReference = new TypeReference<>() {};
-                InputStream inputStream = TypeReference.class.getResourceAsStream("/locations.json");
-
+            TypeReference<List<Map<String, Object>>> typeReference = new TypeReference<>() {};
+            try (InputStream inputStream = DataSeeder.class.getResourceAsStream("/locations.json")) {
                 if (inputStream == null) {
                     System.out.println("Error: locations.json not found in resources folder.");
                     return;
                 }
 
-                try {
-                    List<Map<String, Object>> locations = mapper.readValue(inputStream, typeReference);
+                List<Map<String, Object>> locations = mapper.readValue(inputStream, typeReference);
 
-                    Map<String, Province> provinceMap = new HashMap<>();
-                    Map<String, District> districtMap = new HashMap<>();
-                    Map<String, Sector> sectorMap = new HashMap<>();
-                    Map<String, Cell> cellMap = new HashMap<>();
+                Map<String, Province> provinceMap = provinceRepo.findAll().stream()
+                        .collect(Collectors.toMap(
+                                Province::getName,
+                                province -> province,
+                                (existing, duplicate) -> existing,
+                                HashMap::new));
+                Map<String, District> districtMap = districtRepo.findAll().stream()
+                        .collect(Collectors.toMap(
+                                district -> key(district.getProvince().getName(), district.getName()),
+                                district -> district,
+                                (existing, duplicate) -> existing,
+                                HashMap::new));
+                Map<String, Sector> sectorMap = sectorRepo.findAll().stream()
+                        .collect(Collectors.toMap(
+                                sector -> key(sector.getDistrict().getProvince().getName(), sector.getDistrict().getName(), sector.getName()),
+                                sector -> sector,
+                                (existing, duplicate) -> existing,
+                                HashMap::new));
+                Map<String, Cell> cellMap = cellRepo.findAll().stream()
+                        .collect(Collectors.toMap(
+                                cell -> key(cell.getSector().getDistrict().getProvince().getName(), cell.getSector().getDistrict().getName(), cell.getSector().getName(), cell.getName()),
+                                cell -> cell,
+                                (existing, duplicate) -> existing,
+                                HashMap::new));
+                Map<String, Village> villageMap = villageRepo.findAll().stream()
+                        .collect(Collectors.toMap(
+                                village -> key(village.getCell().getSector().getDistrict().getProvince().getName(), village.getCell().getSector().getDistrict().getName(), village.getCell().getSector().getName(), village.getCell().getName(), village.getName()),
+                                village -> village,
+                                (existing, duplicate) -> existing,
+                                HashMap::new));
 
-                    for (Map<String, Object> loc : locations) {
-                        // 1. Province
-                        String provName = (String) loc.get("province_name");
-                        Province province = provinceMap.computeIfAbsent(provName, k ->
-                                provinceRepo.save(new Province(null, k)));
+                for (Map<String, Object> loc : locations) {
+                    String provName = stringValue(loc, "province_name");
+                    String distName = stringValue(loc, "district_name");
+                    String sectName = stringValue(loc, "sector_name");
+                    String cellName = stringValue(loc, "cell_name");
+                    String villName = stringValue(loc, "village_name");
 
-                        // 2. District
-                        String distName = (String) loc.get("district_name");
-                        // Use unique key combining parent + name to avoid collisions
-                        String distKey = provName + "_" + distName;
-                        District district = districtMap.computeIfAbsent(distKey, k ->
-                                districtRepo.save(new District(null, distName, province)));
-
-                        // 3. Sector
-                        String sectName = (String) loc.get("sector_name");
-                        String sectKey = distKey + "_" + sectName;
-                        Sector sector = sectorMap.computeIfAbsent(sectKey, k ->
-                                sectorRepo.save(new Sector(null, sectName, district)));
-
-                        // 4. Cell
-                        String cellName = (String) loc.get("cell_name");
-                        String cellKey = sectKey + "_" + cellName;
-                        Cell cell = cellMap.computeIfAbsent(cellKey, k ->
-                                cellRepo.save(new Cell(null, cellName, sector)));
-
-                        // 5. Village
-                        String villName = (String) loc.get("village_name");
-                        villageRepo.save(new Village(null, villName, cell));
+                    if (provName == null || distName == null || sectName == null || cellName == null || villName == null) {
+                        continue;
                     }
-                    System.out.println("Geography data successfully seeded!");
-                } catch (Exception e) {
-                    System.out.println("Unable to save location data: " + e.getMessage());
-                    e.printStackTrace();
+
+                    Province province = provinceMap.computeIfAbsent(provName, name -> provinceRepo.save(new Province(null, name)));
+                    String districtKey = key(provName, distName);
+                    District district = districtMap.computeIfAbsent(districtKey, k -> districtRepo.save(new District(null, distName, province)));
+
+                    String sectorKey = key(provName, distName, sectName);
+                    Sector sector = sectorMap.computeIfAbsent(sectorKey, k -> sectorRepo.save(new Sector(null, sectName, district)));
+
+                    String cellKey = key(provName, distName, sectName, cellName);
+                    Cell cell = cellMap.computeIfAbsent(cellKey, k -> cellRepo.save(new Cell(null, cellName, sector)));
+
+                    String villageKey = key(provName, distName, sectName, cellName, villName);
+                    villageMap.computeIfAbsent(villageKey, k -> villageRepo.save(new Village(null, villName, cell)));
                 }
-            } else {
-                System.out.println("Geography data already exists, skipping seeding.");
+
+                System.out.println("Geography data successfully seeded!");
+            } catch (Exception e) {
+                System.out.println("Unable to save location data: " + e.getMessage());
+                e.printStackTrace();
             }
         };
+    }
+
+    private String key(String... parts) {
+        return String.join("|", Arrays.stream(parts)
+                .map(this::normalize)
+                .toArray(String[]::new));
+    }
+
+    private String stringValue(Map<String, Object> location, String key) {
+        Object value = location.get(key);
+        return value == null ? null : value.toString().trim();
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim().toUpperCase();
     }
 }

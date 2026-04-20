@@ -22,7 +22,7 @@ public class ReportHistory {
     private Report report;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "acted_by_id", nullable = false)
+    @JoinColumn(name = "acted_by_id")
     private User actedBy;
 
     @Enumerated(EnumType.STRING)

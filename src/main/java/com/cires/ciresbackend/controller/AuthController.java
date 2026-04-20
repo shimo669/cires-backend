@@ -5,9 +5,11 @@ import com.cires.ciresbackend.dto.AuthResponse;
 import com.cires.ciresbackend.dto.LoginRequest;
 import com.cires.ciresbackend.dto.RegisterRequest;
 import com.cires.ciresbackend.entity.Role;
+import com.cires.ciresbackend.entity.Village;
 import com.cires.ciresbackend.entity.User;
 import com.cires.ciresbackend.repository.RoleRepository;
 import com.cires.ciresbackend.repository.UserRepository;
+import com.cires.ciresbackend.repository.VillageRepository;
 import com.cires.ciresbackend.security.JwtTokenProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,6 +36,9 @@ public class AuthController {
 
     @Autowired
     private RoleRepository roleRepository;
+
+    @Autowired
+    private VillageRepository villageRepository;
 
     @Autowired
     private AuthenticationManager authenticationManager;
@@ -104,6 +109,12 @@ public class AuthController {
         user.setNationalId(request.getNationalId());
         user.setRole(citizenRole);
 
+        if (request.getLocationId() != null) {
+            Village village = villageRepository.findById(request.getLocationId())
+                    .orElseThrow(() -> new IllegalArgumentException("Village not found"));
+            assignGeographyFromVillage(user, village);
+        }
+
         User savedUser = userRepository.save(user);
         logger.info("User '{}' registered successfully", request.getUsername());
 
@@ -112,6 +123,7 @@ public class AuthController {
         response.setEmail(savedUser.getEmail());
         response.setNationalId(savedUser.getNationalId());
         response.setRole(citizenRole.getRoleName());
+        applyLocationResponse(response, savedUser);
 
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(new ApiResponse<>(201, "User registered successfully", response));
@@ -134,7 +146,7 @@ public class AuthController {
 
         try {
             // Authenticate user
-            Authentication authentication = authenticationManager.authenticate(
+            authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(
                             request.getUsername(),
                             request.getPassword()
@@ -161,6 +173,7 @@ public class AuthController {
             response.setEmail(user.getEmail());
             response.setNationalId(user.getNationalId());
             response.setRole(role);
+            applyLocationResponse(response, user);
 
             logger.info("User '{}' logged in successfully", request.getUsername());
             return ResponseEntity.ok()
@@ -170,6 +183,87 @@ public class AuthController {
             logger.warn("Login failed for username: {}. Error: {}", request.getUsername(), e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(401, "Invalid username or password"));
+        }
+    }
+
+    private void applyLocationResponse(AuthResponse response, User user) {
+        if (user.getVillage() != null) {
+            response.setLocationId(user.getVillage().getId());
+            response.setLocationName(user.getVillage().getName());
+            response.setFullRwandanAddress(buildFullAddress(user));
+            return;
+        }
+        if (user.getCell() != null) {
+            response.setLocationId(user.getCell().getId());
+            response.setLocationName(user.getCell().getName());
+            response.setFullRwandanAddress(buildFullAddress(user));
+            return;
+        }
+        if (user.getSector() != null) {
+            response.setLocationId(user.getSector().getId());
+            response.setLocationName(user.getSector().getName());
+            response.setFullRwandanAddress(buildFullAddress(user));
+            return;
+        }
+        if (user.getDistrict() != null) {
+            response.setLocationId(user.getDistrict().getId());
+            response.setLocationName(user.getDistrict().getName());
+            response.setFullRwandanAddress(buildFullAddress(user));
+            return;
+        }
+        if (user.getProvince() != null) {
+            response.setLocationId(user.getProvince().getId());
+            response.setLocationName(user.getProvince().getName());
+            response.setFullRwandanAddress(buildFullAddress(user));
+            return;
+        }
+
+        response.setLocationName("N/A");
+        response.setFullRwandanAddress("N/A");
+    }
+
+    private String buildFullAddress(User user) {
+        StringBuilder address = new StringBuilder();
+
+        if (user.getProvince() != null) {
+            address.append(user.getProvince().getName()).append(" Province");
+        }
+        if (user.getDistrict() != null) {
+            appendPart(address, user.getDistrict().getName() + " District");
+        }
+        if (user.getSector() != null) {
+            appendPart(address, user.getSector().getName() + " Sector");
+        }
+        if (user.getCell() != null) {
+            appendPart(address, user.getCell().getName() + " Cell");
+        }
+        if (user.getVillage() != null) {
+            appendPart(address, user.getVillage().getName() + " Village");
+        }
+
+        return address.length() == 0 ? "N/A" : address.toString();
+    }
+
+    private void appendPart(StringBuilder address, String part) {
+        if (address.length() > 0) {
+            address.append(", ");
+        }
+        address.append(part);
+    }
+
+    private void assignGeographyFromVillage(User user, Village village) {
+        user.setVillage(village);
+        if (village.getCell() != null) {
+            user.setCell(village.getCell());
+            if (village.getCell().getSector() != null) {
+                user.setSector(village.getCell().getSector());
+                if (village.getCell().getSector().getDistrict() != null) {
+                    user.setDistrict(village.getCell().getSector().getDistrict());
+                    if (village.getCell().getSector().getDistrict().getProvince() != null) {
+                        user.setProvince(village.getCell().getSector().getDistrict().getProvince());
+                    }
+                }
+            }
         }
     }
 }

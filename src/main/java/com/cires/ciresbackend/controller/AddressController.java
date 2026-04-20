@@ -22,6 +22,10 @@ public class AddressController {
         try {
             List<LocationResponseDTO> provinces = addressService.getProvinces();
             return ResponseEntity.ok(provinces);
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }

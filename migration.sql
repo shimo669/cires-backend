@@ -58,6 +58,33 @@ CREATE TABLE IF NOT EXISTS reports (
     FOREIGN KEY (current_level_id) REFERENCES government_level(id) ON DELETE RESTRICT
 );
 
+-- Create SLA timer table
+CREATE TABLE IF NOT EXISTS sla_timer (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    report_id BIGINT NOT NULL,
+    level_type ENUM('NATIONAL', 'PROVINCE', 'DISTRICT', 'SECTOR', 'CELL', 'VILLAGE') NOT NULL,
+    start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deadline TIMESTAMP NOT NULL,
+    completed_at TIMESTAMP NULL,
+    status ENUM('ACTIVE', 'COMPLETED', 'BREACHED') NOT NULL,
+    breached BOOLEAN NOT NULL DEFAULT FALSE,
+    FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE
+);
+
+-- Create report history table
+CREATE TABLE IF NOT EXISTS report_history (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    report_id BIGINT NOT NULL,
+    acted_by_id BIGINT NULL,
+    from_level_type ENUM('NATIONAL', 'PROVINCE', 'DISTRICT', 'SECTOR', 'CELL', 'VILLAGE') NULL,
+    to_level_type ENUM('NATIONAL', 'PROVINCE', 'DISTRICT', 'SECTOR', 'CELL', 'VILLAGE') NULL,
+    action VARCHAR(100) NOT NULL,
+    notes TEXT,
+    action_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
+    FOREIGN KEY (acted_by_id) REFERENCES user(user_id) ON DELETE SET NULL
+);
+
 -- Create SlaConfig table
 CREATE TABLE IF NOT EXISTS sla_config (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

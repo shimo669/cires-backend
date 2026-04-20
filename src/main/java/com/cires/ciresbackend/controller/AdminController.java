@@ -29,4 +29,9 @@ public class AdminController {
     public ResponseEntity<?> createSla(@RequestBody SlaConfigDTO config) {
         return ResponseEntity.ok(adminService.createSlaConfig(config));
     }
+
+    @GetMapping("/reports")
+    public ResponseEntity<?> getAllReports() {
+        return ResponseEntity.ok(adminService.getAllReports());
+    }
 }

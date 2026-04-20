@@ -68,16 +68,40 @@ public class ReportController {
         }
     }
 
-    @GetMapping("/level/{levelId}")
-    public ResponseEntity<ApiResponse<?>> getReportsByLevel(@PathVariable String levelId) {
+    @GetMapping("/leader/my-jurisdiction")
+    public ResponseEntity<ApiResponse<?>> getLeaderJurisdictionReports() {
         try {
-            logger.info("Fetching reports for level: {}", levelId);
+            String username = SecurityContextHolder.getContext().getAuthentication().getName();
+            logger.info("Fetching jurisdiction reports for user: {}", username);
 
-            List<ReportDTO> reports = reportService.getReportsByLevel(levelId);
-            logger.info("Found {} reports for level: {}", reports.size(), levelId);
+            List<ReportDTO> reports = reportService.getVisibleReportsForUser(username);
+            return ResponseEntity.ok()
+                    .body(new ApiResponse<>(200, "Reports retrieved successfully", reports));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Error fetching leader jurisdiction reports: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(400, e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error fetching leader jurisdiction reports: {}", e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(500, "Error retrieving reports"));
+        }
+    }
+
+    @GetMapping("/level/{level}")
+    public ResponseEntity<ApiResponse<?>> getReportsByLevel(@PathVariable String level) {
+        try {
+            logger.info("Fetching reports for level: {}", level);
+
+            List<ReportDTO> reports = reportService.getReportsByLevel(level);
+            logger.info("Found {} reports for level: {}", reports.size(), level);
 
             return ResponseEntity.ok()
                     .body(new ApiResponse<>(200, "Reports retrieved successfully", reports));
+        } catch (IllegalArgumentException e) {
+            logger.warn("Invalid level requested: {}", e.getMessage());
+            return ResponseEntity.badRequest()
+                    .body(new ApiResponse<>(400, e.getMessage()));
         } catch (Exception e) {
             logger.error("Error fetching reports by level: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)

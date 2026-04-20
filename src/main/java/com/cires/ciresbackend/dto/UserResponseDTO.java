@@ -8,4 +8,7 @@ public class UserResponseDTO {
     private String email;
     private String role;
     private String levelType;
+    private Long locationId;
+    private String locationName;
+    private String fullRwandanAddress;
 }
