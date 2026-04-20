@@ -21,5 +21,11 @@ public class Feedback {
     @Column(columnDefinition = "TEXT")
     private String comment;
 
+    @Column(name = "approved")
+    private Boolean approved;
+
+    @Column(name = "confirmed_at")
+    private LocalDateTime confirmedAt;
+
     private LocalDateTime createdAt = LocalDateTime.now();
 }

@@ -1,6 +1,7 @@
 package com.cires.ciresbackend.service;
 
 import com.cires.ciresbackend.dto.CreateReportRequest;
+import com.cires.ciresbackend.dto.ReportConfirmationRequestDTO;
 import com.cires.ciresbackend.dto.ReportDTO;
 import com.cires.ciresbackend.entity.*;
 import com.cires.ciresbackend.repository.*;
@@ -23,6 +24,7 @@ public class ReportService {
     private final SlaConfigRepository slaConfigRepository;
     private final SlaTimerRepository slaTimerRepository;
     private final ReportHistoryRepository reportHistoryRepository;
+    private final FeedbackRepository feedbackRepository;
 
     @Transactional
     public ReportDTO createReport(CreateReportRequest request, String username) {
@@ -119,6 +121,7 @@ public class ReportService {
 
         dto.setCreatedAt(report.getCreatedAt());
         dto.setSlaDeadline(report.getSlaDeadline());
+        applyFeedbackToDTO(report, dto);
         return dto;
     }
 
@@ -139,7 +142,7 @@ public class ReportService {
         User actor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
-        report.setStatus("RESOLVED");
+        report.setStatus("PENDING_REPORTER_CONFIRMATION");
         reportRepository.save(report);
 
         GovernmentLevelType levelType = toGovernmentLevelType(report.getCurrentEscalationLevel());
@@ -150,8 +153,65 @@ public class ReportService {
             slaTimerRepository.save(timer);
         });
 
-        writeHistory(report, actor, levelType, levelType, "RESOLVED",
-                "Report resolved. SLA breached: " + isReportOverdue(report));
+        writeHistory(report, actor, levelType, levelType, "PENDING_REPORTER_CONFIRMATION",
+                "Leader marked report as solved and is waiting for reporter confirmation");
+    }
+
+    @Transactional
+    public void confirmResolution(Long reportId, ReportConfirmationRequestDTO request, String username) {
+        Report report = reportRepository.findById(reportId)
+                .orElseThrow(() -> new RuntimeException("Report not found"));
+        User reporter = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("User not found: " + username));
+
+        if (report.getReporter() == null || !report.getReporter().getId().equals(reporter.getId())) {
+            throw new RuntimeException("Only the reporter can confirm this report");
+        }
+
+        if (!"PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus())) {
+            throw new RuntimeException("Report is not waiting for reporter confirmation");
+        }
+
+        if (request.getApproved() == null) {
+            throw new RuntimeException("approved flag is required");
+        }
+
+        if (Boolean.TRUE.equals(request.getApproved())) {
+            validateRating(request.getRating());
+            report.setStatus("RESOLVED");
+            reportRepository.saveAndFlush(report);
+
+            slaTimerRepository.findByReportId(report.getId()).ifPresent(timer -> {
+                timer.setStatus(SlaTimer.SlaTimerStatus.COMPLETED);
+                timer.setCompletedAt(LocalDateTime.now());
+                timer.setBreached(LocalDateTime.now().isAfter(timer.getDeadline()));
+                slaTimerRepository.save(timer);
+            });
+
+            saveOrUpdateFeedback(report, reporter, true, request.getRating(), request.getComment());
+
+            GovernmentLevelType levelType = toGovernmentLevelType(report.getCurrentEscalationLevel());
+            writeHistory(report, reporter, levelType, levelType, "REPORTER_CONFIRMED",
+                    "Reporter confirmed resolution and submitted service rating");
+            return;
+        }
+
+        // Reporter rejected the fix, so reopen the report at the current level.
+        report.setStatus("REOPENED");
+        LocalDateTime deadline = resolveSlaDeadline(
+                report.getCategory().getId(),
+                toGovernmentLevelType(report.getCurrentEscalationLevel()),
+                LocalDateTime.now().plusHours(24)
+        );
+        report.setSlaDeadline(deadline);
+        reportRepository.saveAndFlush(report);
+
+        upsertSlaTimer(report, toGovernmentLevelType(report.getCurrentEscalationLevel()), deadline);
+        saveOrUpdateFeedback(report, reporter, false, request.getRating(), request.getComment());
+
+        GovernmentLevelType levelType = toGovernmentLevelType(report.getCurrentEscalationLevel());
+        writeHistory(report, reporter, levelType, levelType, "REPORTER_REJECTED",
+                "Reporter rejected resolution and report has been reopened");
     }
 
     @Transactional
@@ -162,7 +222,9 @@ public class ReportService {
         int processed = 0;
         for (SlaTimer timer : overdueTimers) {
             Report report = timer.getReport();
-            if (report == null || "RESOLVED".equalsIgnoreCase(report.getStatus())) {
+            if (report == null
+                    || "RESOLVED".equalsIgnoreCase(report.getStatus())
+                    || "PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus())) {
                 continue;
             }
 
@@ -283,6 +345,39 @@ public class ReportService {
 
     private boolean isReportOverdue(Report report) {
         return report.getSlaDeadline() != null && LocalDateTime.now().isAfter(report.getSlaDeadline());
+    }
+
+    private void applyFeedbackToDTO(Report report, ReportDTO dto) {
+        feedbackRepository.findByReportId(report.getId()).ifPresentOrElse(feedback -> {
+            dto.setReporterApproved(feedback.getApproved());
+            dto.setServiceRating(feedback.getRating());
+            dto.setServiceComment(feedback.getComment());
+            dto.setReporterConfirmedAt(feedback.getConfirmedAt());
+        }, () -> {
+            dto.setReporterApproved(null);
+            dto.setServiceRating(null);
+            dto.setServiceComment(null);
+            dto.setReporterConfirmedAt(null);
+        });
+
+        dto.setReporterConfirmationRequired("PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus()));
+    }
+
+    private void saveOrUpdateFeedback(Report report, User reporter, boolean approved, Integer rating, String comment) {
+        Feedback feedback = feedbackRepository.findByReportId(report.getId()).orElseGet(Feedback::new);
+        feedback.setReport(report);
+        feedback.setCitizen(reporter);
+        feedback.setApproved(approved);
+        feedback.setRating(rating);
+        feedback.setComment(comment);
+        feedback.setConfirmedAt(LocalDateTime.now());
+        feedbackRepository.save(feedback);
+    }
+
+    private void validateRating(Integer rating) {
+        if (rating == null || rating < 1 || rating > 5) {
+            throw new RuntimeException("Rating must be between 1 and 5 when approving resolution");
+        }
     }
 
     private Report.EscalationLevel resolveEscalationLevel(String level) {

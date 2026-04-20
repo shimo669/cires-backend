@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS reports (
     report_id BIGINT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT NOT NULL,
-    status ENUM('PENDING', 'IN_PROGRESS', 'RESOLVED', 'ESCALATED') NOT NULL DEFAULT 'PENDING',
+    status ENUM('PENDING', 'IN_PROGRESS', 'PENDING_REPORTER_CONFIRMATION', 'REOPENED', 'RESOLVED', 'ESCALATED', 'BREACHED') NOT NULL DEFAULT 'PENDING',
     category_id BIGINT NOT NULL,
     reporter_id BIGINT NOT NULL,
     current_level_id BIGINT NOT NULL,
@@ -83,6 +83,20 @@ CREATE TABLE IF NOT EXISTS report_history (
     action_timestamp TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
     FOREIGN KEY (acted_by_id) REFERENCES user(user_id) ON DELETE SET NULL
+);
+
+-- Create feedback table
+CREATE TABLE IF NOT EXISTS feedback (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    report_id BIGINT UNIQUE,
+    citizen_id BIGINT,
+    rating INT,
+    comment TEXT,
+    approved BOOLEAN,
+    confirmed_at TIMESTAMP NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (report_id) REFERENCES reports(report_id) ON DELETE CASCADE,
+    FOREIGN KEY (citizen_id) REFERENCES user(user_id) ON DELETE SET NULL
 );
 
 -- Create SlaConfig table

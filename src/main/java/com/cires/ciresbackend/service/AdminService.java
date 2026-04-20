@@ -28,6 +28,7 @@ public class AdminService {
     private final CellRepository cellRepository;
     private final VillageRepository villageRepository;
     private final ReportRepository reportRepository;
+    private final FeedbackRepository feedbackRepository;
 
     public List<UserResponseDTO> getAllUsers() {
         return userRepository.findAll().stream().map(this::toUserResponseDTO).collect(Collectors.toList());
@@ -164,6 +165,13 @@ public class AdminService {
         dto.setIncidentLocationName(report.getIncidentVillage().getName() + " Village");
         dto.setCreatedAt(report.getCreatedAt());
         dto.setSlaDeadline(report.getSlaDeadline());
+        feedbackRepository.findByReportId(report.getId()).ifPresent(feedback -> {
+            dto.setReporterApproved(feedback.getApproved());
+            dto.setServiceRating(feedback.getRating());
+            dto.setServiceComment(feedback.getComment());
+            dto.setReporterConfirmedAt(feedback.getConfirmedAt());
+        });
+        dto.setReporterConfirmationRequired("PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus()));
         return dto;
     }
 

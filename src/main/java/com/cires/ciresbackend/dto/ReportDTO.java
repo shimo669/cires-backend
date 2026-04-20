@@ -21,4 +21,9 @@ public class ReportDTO {
     private Long incidentLocationId;
     private LocalDateTime createdAt;
     private LocalDateTime slaDeadline;
+    private Boolean reporterConfirmationRequired;
+    private Boolean reporterApproved;
+    private Integer serviceRating;
+    private String serviceComment;
+    private LocalDateTime reporterConfirmedAt;
 }

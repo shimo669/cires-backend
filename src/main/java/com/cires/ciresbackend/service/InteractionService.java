@@ -22,11 +22,21 @@ public class InteractionService {
         Report report = reportRepository.findById(reportId).orElseThrow();
         User user = userRepository.findByUsername(username).orElseThrow();
 
-        Feedback feedback = new Feedback();
+        if (report.getReporter() == null || !report.getReporter().getId().equals(user.getId())) {
+            throw new RuntimeException("Only the reporter can submit feedback");
+        }
+
+        if (!"RESOLVED".equalsIgnoreCase(report.getStatus())) {
+            throw new RuntimeException("Feedback can only be submitted after reporter confirmation");
+        }
+
+        Feedback feedback = feedbackRepository.findByReportId(reportId).orElseGet(Feedback::new);
         feedback.setReport(report);
         feedback.setCitizen(user);
         feedback.setRating(request.getRating());
         feedback.setComment(request.getComment());
+        feedback.setApproved(true);
+        feedback.setConfirmedAt(java.time.LocalDateTime.now());
         feedbackRepository.save(feedback);
     }
 
@@ -36,7 +46,7 @@ public class InteractionService {
             dto.setAction(history.getAction());
             dto.setNotes(history.getNotes());
             dto.setTimestamp(history.getActionTimestamp());
-            dto.setActedBy(history.getActedBy().getUsername());
+            dto.setActedBy(history.getActedBy() != null ? history.getActedBy().getUsername() : "SYSTEM");
             return dto;
         }).collect(Collectors.toList());
     }
