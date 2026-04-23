@@ -16,11 +16,11 @@ services:
         fromDatabase:
           name: cires-db
           property: password
-      # ADD THESE TWO LINES BELOW
-      - key: SPRING_JPA_DATABASE_PLATFORM
+      # This tells Spring to use Postgres instead of your local MySQL default
+      - key: HIBERNATE_DIALECT
         value: org.hibernate.dialect.PostgreSQLDialect
-      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
-        value: update
+      - key: JWT_SECRET
+        value: 0b62960339444a8db6526c8ecfc45683 # Using your unique key
 
 databases:
   - name: cires-db
