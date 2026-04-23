@@ -18,9 +18,6 @@ public class AddressService {
     private final VillageRepository villageRepo;
 
     public List<LocationResponseDTO> getProvinces() {
-        if (provinceRepo.count() == 0) {
-            throw new IllegalStateException("Location data has not been seeded yet");
-        }
         return provinceRepo.findAll().stream()
                 .map(p -> new LocationResponseDTO(p.getId(), p.getName(), "PROVINCE"))
                 .collect(Collectors.toList());

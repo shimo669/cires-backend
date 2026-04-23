@@ -3,10 +3,12 @@ package com.cires.ciresbackend.service;
 import com.cires.ciresbackend.dto.RoleUpdateDTO;
 import com.cires.ciresbackend.dto.SlaConfigDTO;
 import com.cires.ciresbackend.dto.ReportDTO;
+import com.cires.ciresbackend.dto.AutoFixedSlaTimerDTO;
 import com.cires.ciresbackend.dto.UserResponseDTO;
 import com.cires.ciresbackend.entity.*;
 import com.cires.ciresbackend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,6 +33,7 @@ public class AdminService {
     private final VillageRepository villageRepository;
     private final ReportRepository reportRepository;
     private final FeedbackRepository feedbackRepository;
+    private final SlaTimerRepository slaTimerRepository;
 
     public List<UserResponseDTO> getAllUsers() {
         return userRepository.findAll().stream().map(this::toUserResponseDTO).collect(Collectors.toList());
@@ -138,6 +141,15 @@ public class AdminService {
         return reports.stream().map(report -> toReportDTO(report, feedbackByReportId.get(report.getId()))).collect(Collectors.toList());
     }
 
+    public List<AutoFixedSlaTimerDTO> getAutoFixedSlaTimers(int limit) {
+        int boundedLimit = Math.max(1, Math.min(limit, 200));
+        return slaTimerRepository
+                .findByAutoFixedBySchedulerTrueOrderByAutoFixedAtDesc(PageRequest.of(0, boundedLimit))
+                .stream()
+                .map(this::toAutoFixedSlaTimerDTO)
+                .toList();
+    }
+
     private Long requireLocationId(Long locationId) {
         if (locationId == null) {
             throw new RuntimeException("locationId is required for this level type");
@@ -150,12 +162,26 @@ public class AdminService {
         dto.setId(user.getId());
         dto.setUsername(user.getUsername());
         dto.setEmail(user.getEmail());
+        dto.setNationalId(maskNationalId(user.getNationalId()));
         dto.setRole(user.getRole() != null ? toDisplayRoleName(user.getRole().getRoleName()) : "NO_ROLE");
         dto.setLevelType(user.getLevelType() != null ? user.getLevelType().name() : "CITIZEN");
         dto.setLocationId(resolveLocationId(user));
         dto.setLocationName(resolveLocationName(user));
         dto.setFullRwandanAddress(buildFullRwandanAddress(user));
         return dto;
+    }
+
+    private String maskNationalId(String nationalId) {
+        if (nationalId == null || nationalId.isBlank()) {
+            return "N/A";
+        }
+
+        String trimmed = nationalId.trim();
+        if (trimmed.length() <= 3) {
+            return "*".repeat(trimmed.length());
+        }
+
+        return "*".repeat(trimmed.length() - 3) + trimmed.substring(trimmed.length() - 3);
     }
 
     private ReportDTO toReportDTO(Report report, Feedback feedback) {
@@ -166,12 +192,12 @@ public class AdminService {
         dto.setStatus(report.getStatus());
         dto.setCategoryId(report.getCategory().getId());
         dto.setCategoryName(report.getCategory().getCategoryName());
-        dto.setReporterId(report.getReporter().getId());
-        dto.setReporterUsername(report.getReporter().getUsername());
+        dto.setReporterId(report.getReporter() != null ? report.getReporter().getId() : null);
+        dto.setReporterUsername(report.getReporter() != null ? report.getReporter().getUsername() : "N/A");
         dto.setIncidentLocationId(report.getIncidentVillage().getId());
         dto.setIncidentLocationName(report.getIncidentVillage().getName() + " Village");
         dto.setCreatedAt(report.getCreatedAt());
-        dto.setSlaDeadline(report.getSlaDeadline());
+        dto.setSlaDeadline(isFinalizedReportStatus(report.getStatus()) ? null : report.getSlaDeadline());
         if (feedback != null) {
             dto.setReporterApproved(feedback.getApproved());
             dto.setServiceRating(feedback.getRating());
@@ -182,12 +208,31 @@ public class AdminService {
         return dto;
     }
 
+    private boolean isFinalizedReportStatus(String status) {
+        return "RESOLVED".equalsIgnoreCase(status) || "PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(status);
+    }
+
     private String normalizeRoleName(String roleName) {
         if (roleName == null || roleName.trim().isEmpty()) {
             return null;
         }
         String normalized = roleName.trim().toUpperCase(Locale.ROOT);
         return normalized.startsWith("ROLE_") ? normalized.substring("ROLE_".length()) : normalized;
+    }
+
+    private AutoFixedSlaTimerDTO toAutoFixedSlaTimerDTO(SlaTimer timer) {
+        AutoFixedSlaTimerDTO dto = new AutoFixedSlaTimerDTO();
+        dto.setTimerId(timer.getId());
+        dto.setReportId(timer.getReport() != null ? timer.getReport().getId() : null);
+        dto.setReportStatus(timer.getReport() != null ? timer.getReport().getStatus() : null);
+        dto.setEscalationLevel(timer.getReport() != null && timer.getReport().getCurrentEscalationLevel() != null
+                ? timer.getReport().getCurrentEscalationLevel().name()
+                : null);
+        dto.setLevelType(timer.getLevelType() != null ? timer.getLevelType().name() : null);
+        dto.setDeadline(timer.getDeadline());
+        dto.setCompletedAt(timer.getCompletedAt());
+        dto.setAutoFixedAt(timer.getAutoFixedAt());
+        return dto;
     }
 
     private String toDisplayRoleName(String roleName) {

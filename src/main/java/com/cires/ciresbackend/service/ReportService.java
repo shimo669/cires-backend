@@ -6,12 +6,20 @@ import com.cires.ciresbackend.dto.ReportDTO;
 import com.cires.ciresbackend.entity.*;
 import com.cires.ciresbackend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -68,7 +76,7 @@ public class ReportService {
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
 
         List<Report> reports = reportRepository.findByReporterId(user.getId());
-        return reports.stream().map(this::convertToDTO).toList();
+        return convertReportsToDTOWithFeedback(reports);
     }
 
     public List<ReportDTO> getReportsByLevel(String level) {
@@ -79,11 +87,11 @@ public class ReportService {
         Report.EscalationLevel escalationLevel = resolveEscalationLevel(level);
         List<Report> reports = reportRepository.findByCurrentEscalationLevel(escalationLevel);
 
-        return reports.stream().map(this::convertToDTO).toList();
+        return convertReportsToDTOWithFeedback(reports);
     }
 
     public List<ReportDTO> getAllReports() {
-        return reportRepository.findAll().stream().map(this::convertToDTO).toList();
+        return convertReportsToDTOWithFeedback(reportRepository.findAll());
     }
 
     @Transactional(readOnly = true)
@@ -91,10 +99,22 @@ public class ReportService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
 
-        return reportRepository.findAll().stream()
-                .filter(report -> isVisibleToUser(report, user))
-                .map(this::convertToDTO)
-                .toList();
+        List<Report> visibleReports = findVisibleReportsPage(user, Pageable.unpaged()).getContent();
+
+        return convertReportsToDTOWithFeedback(visibleReports);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<ReportDTO> getVisibleReportsPageForUser(String username, int page, int size) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
+
+        int safePage = Math.max(page, 0);
+        int safeSize = Math.max(1, Math.min(size, 200));
+        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<Report> reportPage = findVisibleReportsPage(user, pageable);
+        return convertReportPageToDTOPage(reportPage);
     }
 
     public ReportDTO getReportById(Long reportId) {
@@ -105,6 +125,10 @@ public class ReportService {
     }
 
     private ReportDTO convertToDTO(Report report) {
+        return convertToDTO(report, feedbackRepository.findByReportId(report.getId()).orElse(null));
+    }
+
+    private ReportDTO convertToDTO(Report report, Feedback feedback) {
         ReportDTO dto = new ReportDTO();
         dto.setId(report.getId());
         dto.setTitle(report.getTitle());
@@ -112,17 +136,69 @@ public class ReportService {
         dto.setStatus(report.getStatus());
         dto.setCategoryId(report.getCategory().getId());
         dto.setCategoryName(report.getCategory().getCategoryName());
-        dto.setReporterId(report.getReporter().getId());
-        dto.setReporterUsername(report.getReporter().getUsername());
+        dto.setReporterId(report.getReporter() != null ? report.getReporter().getId() : null);
+        dto.setReporterUsername(report.getReporter() != null ? report.getReporter().getUsername() : "N/A");
 
         // Mapped to the strict village
         dto.setIncidentLocationId(report.getIncidentVillage().getId());
         dto.setIncidentLocationName(report.getIncidentVillage().getName() + " Village");
 
         dto.setCreatedAt(report.getCreatedAt());
-        dto.setSlaDeadline(report.getSlaDeadline());
-        applyFeedbackToDTO(report, dto);
+        dto.setSlaDeadline(isFinalizedReportStatus(report.getStatus()) ? null : report.getSlaDeadline());
+        applyFeedbackToDTO(report, dto, feedback);
         return dto;
+    }
+
+    private boolean isFinalizedReportStatus(String status) {
+        return "RESOLVED".equalsIgnoreCase(status) || "PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(status);
+    }
+
+    private List<ReportDTO> convertReportsToDTOWithFeedback(List<Report> reports) {
+        if (reports.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> reportIds = reports.stream().map(Report::getId).toList();
+        Map<Long, Feedback> feedbackByReportId = feedbackRepository.findByReportIdIn(reportIds).stream()
+                .collect(Collectors.toMap(feedback -> feedback.getReport().getId(), Function.identity(), (a, b) -> a));
+
+        return reports.stream()
+                .map(report -> convertToDTO(report, feedbackByReportId.get(report.getId())))
+                .toList();
+    }
+
+    private Page<ReportDTO> convertReportPageToDTOPage(Page<Report> reportPage) {
+        List<ReportDTO> items = convertReportsToDTOWithFeedback(reportPage.getContent());
+        return new PageImpl<>(items, reportPage.getPageable(), reportPage.getTotalElements());
+    }
+
+    private Page<Report> findVisibleReportsPage(User user, Pageable pageable) {
+        User.UserLevelType effectiveLevelType = resolveEffectiveLevelType(user);
+
+        return switch (effectiveLevelType) {
+            case NATIONAL_ADMIN -> reportRepository.findAll(pageable);
+            case PROVINCE_GOVERNOR -> user.getProvince() == null
+                    ? Page.empty(pageable)
+                    : reportRepository.findByCurrentEscalationLevelAndIncidentVillageCellSectorDistrictProvinceId(
+                    Report.EscalationLevel.AT_PROVINCE, user.getProvince().getId(), pageable);
+            case DISTRICT_MAYOR -> user.getDistrict() == null
+                    ? Page.empty(pageable)
+                    : reportRepository.findByCurrentEscalationLevelAndIncidentVillageCellSectorDistrictId(
+                    Report.EscalationLevel.AT_DISTRICT, user.getDistrict().getId(), pageable);
+            case SECTOR_LEADER -> user.getSector() == null
+                    ? Page.empty(pageable)
+                    : reportRepository.findByCurrentEscalationLevelAndIncidentVillageCellSectorId(
+                    Report.EscalationLevel.AT_SECTOR, user.getSector().getId(), pageable);
+            case CELL_LEADER -> user.getCell() == null
+                    ? Page.empty(pageable)
+                    : reportRepository.findByCurrentEscalationLevelAndIncidentVillageCellId(
+                    Report.EscalationLevel.AT_CELL, user.getCell().getId(), pageable);
+            case VILLAGE_LEADER -> user.getVillage() == null
+                    ? Page.empty(pageable)
+                    : reportRepository.findByCurrentEscalationLevelAndIncidentVillageId(
+                    Report.EscalationLevel.AT_VILLAGE, user.getVillage().getId(), pageable);
+            case CITIZEN -> reportRepository.findByReporterId(user.getId(), pageable);
+        };
     }
 
     @Transactional
@@ -132,6 +208,13 @@ public class ReportService {
         User actor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
+        validateActorCanHandleCurrentLevel(report, actor);
+        if ("PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus())
+                || "RESOLVED".equalsIgnoreCase(report.getStatus())) {
+            throw new RuntimeException("Cannot escalate a report that is already solved or pending reporter confirmation");
+        }
+
+        // Manual leader escalation is allowed at any time while the ticket is still active.
         advanceEscalation(report, actor, false);
     }
 
@@ -142,14 +225,22 @@ public class ReportService {
         User actor = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("User not found: " + username));
 
+        validateActorCanHandleCurrentLevel(report, actor);
+        if ("RESOLVED".equalsIgnoreCase(report.getStatus())) {
+            throw new RuntimeException("Report is already resolved");
+        }
+
         report.setStatus("PENDING_REPORTER_CONFIRMATION");
+        report.setSlaDeadline(null);
         reportRepository.save(report);
 
         GovernmentLevelType levelType = toGovernmentLevelType(report.getCurrentEscalationLevel());
         slaTimerRepository.findByReportId(reportId).ifPresent(timer -> {
             timer.setStatus(SlaTimer.SlaTimerStatus.COMPLETED);
             timer.setCompletedAt(LocalDateTime.now());
-            timer.setBreached(LocalDateTime.now().isAfter(timer.getDeadline()));
+            timer.setBreached(false);
+            timer.setAutoFixedByScheduler(false);
+            timer.setAutoFixedAt(null);
             slaTimerRepository.save(timer);
         });
 
@@ -179,12 +270,15 @@ public class ReportService {
         if (Boolean.TRUE.equals(request.getApproved())) {
             validateRating(request.getRating());
             report.setStatus("RESOLVED");
+            report.setSlaDeadline(null);
             reportRepository.saveAndFlush(report);
 
             slaTimerRepository.findByReportId(report.getId()).ifPresent(timer -> {
                 timer.setStatus(SlaTimer.SlaTimerStatus.COMPLETED);
                 timer.setCompletedAt(LocalDateTime.now());
-                timer.setBreached(LocalDateTime.now().isAfter(timer.getDeadline()));
+                timer.setBreached(false);
+                timer.setAutoFixedByScheduler(false);
+                timer.setAutoFixedAt(null);
                 slaTimerRepository.save(timer);
             });
 
@@ -222,19 +316,23 @@ public class ReportService {
         int processed = 0;
         for (SlaTimer timer : overdueTimers) {
             Report report = timer.getReport();
-            if (report == null
-                    || "RESOLVED".equalsIgnoreCase(report.getStatus())
+            if (report == null) {
+                continue;
+            }
+
+            if ("RESOLVED".equalsIgnoreCase(report.getStatus())
                     || "PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus())) {
+                // Defensive cleanup: keep resolved/confirmed reports from being reconsidered.
+                finalizeTimerAsCompleted(timer);
                 continue;
             }
 
             boolean changed = false;
-            while (isReportOverdue(report) && report.getCurrentEscalationLevel() != Report.EscalationLevel.AT_NATIONAL) {
+            if (isReportOverdue(report) && report.getCurrentEscalationLevel() != Report.EscalationLevel.AT_NATIONAL) {
+                // Move only one level per run so each leadership tier gets its SLA handling window.
                 advanceEscalation(report, null, true);
                 changed = true;
-            }
-
-            if (isReportOverdue(report) && report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_NATIONAL) {
+            } else if (isReportOverdue(report) && report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_NATIONAL) {
                 markBreached(report, null);
                 changed = true;
             }
@@ -245,6 +343,17 @@ public class ReportService {
         }
 
         return processed;
+    }
+
+    private void finalizeTimerAsCompleted(SlaTimer timer) {
+        timer.setStatus(SlaTimer.SlaTimerStatus.COMPLETED);
+        if (timer.getCompletedAt() == null) {
+            timer.setCompletedAt(LocalDateTime.now());
+        }
+        timer.setBreached(false);
+        timer.setAutoFixedByScheduler(true);
+        timer.setAutoFixedAt(LocalDateTime.now());
+        slaTimerRepository.save(timer);
     }
 
     private Village resolveIncidentVillage(Long incidentLocationId, User reporter) {
@@ -275,6 +384,8 @@ public class ReportService {
         timer.setCompletedAt(null);
         timer.setStatus(SlaTimer.SlaTimerStatus.ACTIVE);
         timer.setBreached(false);
+        timer.setAutoFixedByScheduler(false);
+        timer.setAutoFixedAt(null);
         slaTimerRepository.save(timer);
     }
 
@@ -282,7 +393,11 @@ public class ReportService {
                               String action, String notes) {
         ReportHistory history = new ReportHistory();
         history.setReport(report);
-        history.setActedBy(actedBy);
+        User actor = actedBy != null ? actedBy : report.getReporter();
+        if (actor == null) {
+            return;
+        }
+        history.setActedBy(actor);
         history.setFromLevelType(fromLevel);
         history.setToLevelType(toLevel);
         history.setAction(action);
@@ -306,7 +421,7 @@ public class ReportService {
         report.setStatus("ESCALATED");
 
         GovernmentLevelType toLevel = toGovernmentLevelType(newLevel);
-        LocalDateTime deadline = resolveSlaDeadline(report.getCategory().getId(), toLevel, report.getSlaDeadline());
+        LocalDateTime deadline = resolveSlaDeadline(report.getCategory().getId(), toLevel, LocalDateTime.now().plusHours(24));
         report.setSlaDeadline(deadline);
         reportRepository.saveAndFlush(report);
 
@@ -347,18 +462,18 @@ public class ReportService {
         return report.getSlaDeadline() != null && LocalDateTime.now().isAfter(report.getSlaDeadline());
     }
 
-    private void applyFeedbackToDTO(Report report, ReportDTO dto) {
-        feedbackRepository.findByReportId(report.getId()).ifPresentOrElse(feedback -> {
+    private void applyFeedbackToDTO(Report report, ReportDTO dto, Feedback feedback) {
+        if (feedback != null) {
             dto.setReporterApproved(feedback.getApproved());
             dto.setServiceRating(feedback.getRating());
             dto.setServiceComment(feedback.getComment());
             dto.setReporterConfirmedAt(feedback.getConfirmedAt());
-        }, () -> {
+        } else {
             dto.setReporterApproved(null);
             dto.setServiceRating(null);
             dto.setServiceComment(null);
             dto.setReporterConfirmedAt(null);
-        });
+        }
 
         dto.setReporterConfirmationRequired("PENDING_REPORTER_CONFIRMATION".equalsIgnoreCase(report.getStatus()));
     }
@@ -399,11 +514,9 @@ public class ReportService {
     }
 
     private boolean isVisibleToUser(Report report, User user) {
-        if (user.getLevelType() == null) {
-            return false;
-        }
+        User.UserLevelType effectiveLevelType = resolveEffectiveLevelType(user);
 
-        return switch (user.getLevelType()) {
+        return switch (effectiveLevelType) {
             case NATIONAL_ADMIN -> true;
             case PROVINCE_GOVERNOR -> matchesProvinceScope(report, user)
                     && report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_PROVINCE;
@@ -417,6 +530,29 @@ public class ReportService {
                     && report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_VILLAGE;
             case CITIZEN -> report.getReporter() != null && report.getReporter().getId().equals(user.getId());
         };
+    }
+
+    private User.UserLevelType resolveEffectiveLevelType(User user) {
+        if (user.getLevelType() != null && user.getLevelType() != User.UserLevelType.CITIZEN) {
+            return user.getLevelType();
+        }
+
+        String roleName = user.getRole() != null ? user.getRole().getRoleName() : null;
+        if (roleName != null) {
+            String normalizedRole = roleName.trim().toUpperCase(Locale.ROOT);
+            if ("ADMIN".equals(normalizedRole) || "ROLE_ADMIN".equals(normalizedRole) || normalizedRole.endsWith("ADMIN")) {
+                return User.UserLevelType.NATIONAL_ADMIN;
+            }
+            if ("LEADER".equals(normalizedRole) || "ROLE_LEADER".equals(normalizedRole) || normalizedRole.endsWith("LEADER")) {
+                if (user.getVillage() != null) return User.UserLevelType.VILLAGE_LEADER;
+                if (user.getCell() != null) return User.UserLevelType.CELL_LEADER;
+                if (user.getSector() != null) return User.UserLevelType.SECTOR_LEADER;
+                if (user.getDistrict() != null) return User.UserLevelType.DISTRICT_MAYOR;
+                if (user.getProvince() != null) return User.UserLevelType.PROVINCE_GOVERNOR;
+            }
+        }
+
+        return user.getLevelType() != null ? user.getLevelType() : User.UserLevelType.CITIZEN;
     }
 
     private boolean matchesProvinceScope(Report report, User user) {
@@ -457,5 +593,27 @@ public class ReportService {
         return user.getVillage() != null
                 && report.getIncidentVillage() != null
                 && report.getIncidentVillage().getId().equals(user.getVillage().getId());
+    }
+
+    private void validateActorCanHandleCurrentLevel(Report report, User actor) {
+        User.UserLevelType levelType = resolveEffectiveLevelType(actor);
+        boolean allowed = switch (levelType) {
+            case NATIONAL_ADMIN -> true;
+            case PROVINCE_GOVERNOR -> report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_PROVINCE
+                    && matchesProvinceScope(report, actor);
+            case DISTRICT_MAYOR -> report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_DISTRICT
+                    && matchesDistrictScope(report, actor);
+            case SECTOR_LEADER -> report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_SECTOR
+                    && matchesSectorScope(report, actor);
+            case CELL_LEADER -> report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_CELL
+                    && matchesCellScope(report, actor);
+            case VILLAGE_LEADER -> report.getCurrentEscalationLevel() == Report.EscalationLevel.AT_VILLAGE
+                    && matchesVillageScope(report, actor);
+            case CITIZEN -> false;
+        };
+
+        if (!allowed) {
+            throw new RuntimeException("You are not allowed to handle this report at its current escalation level");
+        }
     }
 }

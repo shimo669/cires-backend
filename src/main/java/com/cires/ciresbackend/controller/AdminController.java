@@ -34,4 +34,9 @@ public class AdminController {
     public ResponseEntity<?> getAllReports() {
         return ResponseEntity.ok(adminService.getAllReports());
     }
+
+    @GetMapping("/sla-timers/auto-fixed")
+    public ResponseEntity<?> getAutoFixedSlaTimers(@RequestParam(defaultValue = "50") int limit) {
+        return ResponseEntity.ok(adminService.getAutoFixedSlaTimers(limit));
+    }
 }

@@ -9,6 +9,7 @@ import com.cires.ciresbackend.entity.*;
 import com.cires.ciresbackend.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -49,6 +50,7 @@ public class InteractionService {
         feedbackRepository.save(feedback);
     }
 
+    @Transactional(readOnly = true)
     public List<HistoryResponseDTO> getReportHistory(Long reportId) {
         return historyRepository.findByReportIdOrderByActionTimestampDesc(reportId).stream().map(history -> {
             HistoryResponseDTO dto = new HistoryResponseDTO();

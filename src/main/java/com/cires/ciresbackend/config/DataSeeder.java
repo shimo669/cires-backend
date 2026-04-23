@@ -40,6 +40,11 @@ public class DataSeeder {
             }
 
             // --- PHASE 2: SEED GEOGRAPHY ---
+            if (villageRepo.count() > 0) {
+                System.out.println("Geography already seeded, skipping locations.json import.");
+                return;
+            }
+
             System.out.println("Seeding geographic data from locations.json...");
             ObjectMapper mapper = new ObjectMapper();
 

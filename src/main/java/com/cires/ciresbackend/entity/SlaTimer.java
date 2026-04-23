@@ -6,7 +6,13 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "sla_timer")
+@Table(
+        name = "sla_timer",
+        indexes = {
+                @Index(name = "idx_sla_timer_status_deadline", columnList = "status,deadline"),
+                @Index(name = "idx_sla_timer_auto_fixed", columnList = "auto_fixed_by_scheduler,auto_fixed_at")
+        }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -41,6 +47,12 @@ public class SlaTimer {
     @Column(nullable = false)
     private Boolean breached;
 
+    @Column(name = "auto_fixed_by_scheduler", nullable = false)
+    private Boolean autoFixedByScheduler;
+
+    @Column(name = "auto_fixed_at")
+    private LocalDateTime autoFixedAt;
+
     @PrePersist
     protected void onCreate() {
         if (startTime == null) {
@@ -51,6 +63,9 @@ public class SlaTimer {
         }
         if (breached == null) {
             breached = false;
+        }
+        if (autoFixedByScheduler == null) {
+            autoFixedByScheduler = false;
         }
     }
 

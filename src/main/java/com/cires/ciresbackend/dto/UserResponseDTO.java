@@ -6,6 +6,7 @@ public class UserResponseDTO {
     private Long id;
     private String username;
     private String email;
+    private String nationalId;
     private String role;
     private String levelType;
     private Long locationId;
