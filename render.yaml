@@ -4,7 +4,6 @@ services:
     name: cires-backend
     runtime: java
     plan: free
-    buildContext: .
     buildCommand: ./mvnw clean install -DskipTests
     startCommand: java -jar target/*.jar
     envVars:
@@ -23,21 +22,9 @@ services:
       - key: SPRING_JPA_HIBERNATE_DDL_AUTO
         value: update
 
-  # 2. The MySQL Database (Deployed via Docker)
-  - type: pserv
-    name: cires-db
-    runtime: docker
+# 2. The Native Managed Database
+databases:
+  - name: cires-db
+    databaseName: cires_db
+    user: cires_user
     plan: free
-    envVars:
-      - key: MYSQL_DATABASE
-        value: cires_db
-      - key: MYSQL_ROOT_PASSWORD
-        generateValue: true
-      - key: MYSQL_USER
-        value: cires_user
-      - key: MYSQL_PASSWORD
-        generateValue: true
-    disk:
-      name: mysql-data
-      mountPath: /var/lib/mysql
-      sizeGB: 1
