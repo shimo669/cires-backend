@@ -1,7 +1,7 @@
 services:
   - type: web
     name: cires-backend
-    runtime: docker # 'java' is not a valid keyword here; 'docker' is the way to go
+    runtime: docker
     plan: free
     envVars:
       - key: SPRING_DATASOURCE_URL
@@ -16,11 +16,12 @@ services:
         fromDatabase:
           name: cires-db
           property: password
+      # ADD THESE TWO LINES BELOW
+      - key: SPRING_JPA_DATABASE_PLATFORM
+        value: org.hibernate.dialect.PostgreSQLDialect
       - key: SPRING_JPA_HIBERNATE_DDL_AUTO
         value: update
 
 databases:
   - name: cires-db
-    databaseName: cires_db
-    user: cires_user
     plan: free
