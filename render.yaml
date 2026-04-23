@@ -1,13 +1,15 @@
 services:
+  # 1. The Spring Boot Backend
   - type: web
     name: cires-backend
     runtime: docker
     plan: free
     envVars:
+      # This property adds the required 'jdbc:' prefix automatically
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
           name: cires-db
-          property: connectionString
+          property: jdbcConnectionString
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: cires-db
@@ -16,14 +18,23 @@ services:
         fromDatabase:
           name: cires-db
           property: password
+      # Force Hibernate to use PostgreSQL and the correct driver
+      - key: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+        value: org.postgresql.Driver
       - key: HIBERNATE_DIALECT
         value: org.hibernate.dialect.PostgreSQLDialect
-      # ADD THIS LINE BELOW
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: update
+      # Match the port in your application.properties
       - key: PORT
         value: 8081
+      # JWT Security key
       - key: JWT_SECRET
         value: 0b62960339444a8db6526c8ecfc45683
 
+# 2. The Native Managed PostgreSQL Database
 databases:
   - name: cires-db
+    databaseName: cires_db
+    user: cires_user
     plan: free
