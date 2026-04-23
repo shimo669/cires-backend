@@ -1,11 +1,8 @@
 services:
-  # 1. The Spring Boot Backend
   - type: web
     name: cires-backend
-    runtime: java
+    runtime: docker # 'java' is not a valid keyword here; 'docker' is the way to go
     plan: free
-    buildCommand: ./mvnw clean install -DskipTests
-    startCommand: java -jar target/*.jar
     envVars:
       - key: SPRING_DATASOURCE_URL
         fromDatabase:
@@ -22,7 +19,6 @@ services:
       - key: SPRING_JPA_HIBERNATE_DDL_AUTO
         value: update
 
-# 2. The Native Managed Database
 databases:
   - name: cires-db
     databaseName: cires_db
