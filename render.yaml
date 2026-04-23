@@ -1,15 +1,25 @@
 services:
   - type: web
     name: cires-backend
-    runtime: java
+    # Use 'docker' since your project has a Dockerfile and it's more reliable
+    runtime: docker
     plan: free
-    buildCommand: ./mvnw clean install -DskipTests
-    startCommand: java -jar target/*.jar
     envVars:
+      # Manually building the JDBC URL because Blueprint doesn't support the JDBC property
       - key: SPRING_DATASOURCE_URL
+        value: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+      - key: DB_HOST
         fromDatabase:
           name: cires-db
-          property: jdbcConnectionString
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: cires-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: cires-db
+          property: database
       - key: SPRING_DATASOURCE_USERNAME
         fromDatabase:
           name: cires-db
