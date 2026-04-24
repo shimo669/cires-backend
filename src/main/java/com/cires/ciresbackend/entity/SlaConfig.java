@@ -23,6 +23,6 @@ public class SlaConfig {
     @Column(name = "level_type", nullable = false)
     private GovernmentLevelType levelType;
 
-    @Column(name = "duration_minutes", nullable = false)
-    private Integer durationMinutes;
+    @Column(name = "duration_hours", nullable = false)
+    private Integer durationHours;
 }

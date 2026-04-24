@@ -83,21 +83,21 @@ public class DataSeeder {
                         config.setCategory(cat);
                         config.setLevelType(level);
                         
-                        // Special case for Health category: 20 minutes
-                        if (cat.getCategoryName().equalsIgnoreCase("Health") || cat.getCategoryName().equalsIgnoreCase("Santé")) {
-                            config.setDurationMinutes(20);
-                        } else {
-                            // Default durations converted to minutes: Village: 24h, Cell: 48h, etc.
-                            int minutes = switch (level) {
-                                case VILLAGE -> 24 * 60;
-                                case CELL -> 48 * 60;
-                                case SECTOR -> 72 * 60;
-                                case DISTRICT -> 120 * 60;
-                                case PROVINCE -> 168 * 60;
-                                case NATIONAL -> 240 * 60;
-                            };
-                            config.setDurationMinutes(minutes);
-                        }
+                        SlaConfig config = new SlaConfig();
+                        config.setCategory(cat);
+                        config.setLevelType(level);
+                        
+                        // Default durations: Village: 24h, Cell: 48h, Sector: 72h, etc.
+                        int hours = switch (level) {
+                            case VILLAGE -> 24;
+                            case CELL -> 48;
+                            case SECTOR -> 72;
+                            case DISTRICT -> 120; // 5 days
+                            case PROVINCE -> 168; // 7 days
+                            case NATIONAL -> 240; // 10 days
+                        };
+                        
+                        config.setDurationHours(hours);
                         slaConfigRepo.save(config);
                     }
                 }
@@ -123,17 +123,12 @@ public class DataSeeder {
                         report.setStatus("PENDING");
                         report.setCurrentEscalationLevel(Report.EscalationLevel.AT_VILLAGE);
 
-                        // If it's a Health issue, use the 20-minute rule
-                        boolean isHealth = category.getCategoryName().equalsIgnoreCase("Health") || category.getCategoryName().equalsIgnoreCase("Santé");
-
+                        // Make reports #1 and #2 OVERDUE (2 days ago)
+                        // Make others active (2 days from now)
                         if (i <= 2) {
-                            // Overdue: 2 days ago (or 30 mins ago if Health)
-                            int overdueMinutes = isHealth ? 30 : 2880; // 2880 = 2 days
-                            report.setSlaDeadline(java.time.LocalDateTime.now().minusMinutes(overdueMinutes));
+                            report.setSlaDeadline(java.time.LocalDateTime.now().minusDays(2));
                         } else {
-                            // Active: 2 days from now (or 10 mins from now if Health)
-                            int activeMinutes = isHealth ? 10 : 2880;
-                            report.setSlaDeadline(java.time.LocalDateTime.now().plusMinutes(activeMinutes));
+                            report.setSlaDeadline(java.time.LocalDateTime.now().plusDays(2));
                         }
 
                         reportRepo.save(report);

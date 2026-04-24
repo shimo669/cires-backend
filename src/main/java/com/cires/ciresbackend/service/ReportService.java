@@ -317,7 +317,7 @@ public class ReportService {
         LocalDateTime deadline = resolveSlaDeadline(
                 report.getCategory().getId(),
                 toGovernmentLevelType(report.getCurrentEscalationLevel()),
-                LocalDateTime.now().plusMinutes(1440)
+                LocalDateTime.now().plusHours(24)
         );
         report.setSlaDeadline(deadline);
         reportRepository.saveAndFlush(report);
@@ -393,11 +393,8 @@ public class ReportService {
 
     private LocalDateTime resolveSlaDeadline(Long categoryId, GovernmentLevelType levelType, LocalDateTime fallbackDeadline) {
         return slaConfigRepository.findByCategoryIdAndLevelType(categoryId, levelType)
-                .map(config -> {
-                    Integer minutes = config.getDurationMinutes();
-                    return LocalDateTime.now().plusMinutes(minutes != null ? minutes : 60);
-                })
-                .orElseGet(() -> fallbackDeadline != null ? fallbackDeadline : LocalDateTime.now().plusMinutes(60));
+                .map(config -> LocalDateTime.now().plusHours(config.getDurationHours()))
+                .orElseGet(() -> fallbackDeadline != null ? fallbackDeadline : LocalDateTime.now().plusHours(24));
     }
 
     private void upsertSlaTimer(Report report, GovernmentLevelType levelType, LocalDateTime deadline) {
@@ -446,7 +443,7 @@ public class ReportService {
         report.setStatus("ESCALATED");
 
         GovernmentLevelType toLevel = toGovernmentLevelType(newLevel);
-        LocalDateTime deadline = resolveSlaDeadline(report.getCategory().getId(), toLevel, LocalDateTime.now().plusMinutes(1440));
+        LocalDateTime deadline = resolveSlaDeadline(report.getCategory().getId(), toLevel, LocalDateTime.now().plusHours(24));
         report.setSlaDeadline(deadline);
         reportRepository.saveAndFlush(report);
 
