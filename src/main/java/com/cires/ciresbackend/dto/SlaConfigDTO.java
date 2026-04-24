@@ -9,5 +9,5 @@ import lombok.*;
 public class SlaConfigDTO {
     private Long categoryId;
     private String levelType;
-    private Integer durationHours;
+    private Integer durationMinutes;
 }

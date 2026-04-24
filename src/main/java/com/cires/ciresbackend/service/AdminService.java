@@ -343,7 +343,7 @@ public class AdminService {
             throw new RuntimeException("Invalid SLA level type");
         }
 
-        if (request.getDurationHours() == null || request.getDurationHours() <= 0) {
+        if (request.getDurationMinutes() == null || request.getDurationMinutes() <= 0) {
             throw new RuntimeException("SLA duration must be greater than 0");
         }
 
@@ -351,7 +351,7 @@ public class AdminService {
                 .orElseGet(SlaConfig::new);
         slaConfig.setCategory(category);
         slaConfig.setLevelType(levelType);
-        slaConfig.setDurationHours(request.getDurationHours());
+        slaConfig.setDurationMinutes(request.getDurationMinutes());
 
         slaConfigRepository.save(slaConfig);
 
