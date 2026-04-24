@@ -26,6 +26,7 @@ public class DataSeeder {
             RoleRepository roleRepo,
             UserRepository userRepo,
             SlaConfigRepository slaConfigRepo,
+            ReportRepository reportRepo,
             org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         return args -> {
 
@@ -97,6 +98,38 @@ public class DataSeeder {
                     }
                 }
                 System.out.println("Default SLA configurations successfully seeded!");
+            }
+
+            // --- PHASE 1.8: SEED SAMPLE REPORTS ---
+            if (reportRepo.count() == 0) {
+                System.out.println("Seeding sample reports...");
+                User admin = userRepo.findByUsername("admin").orElse(null);
+                List<Category> categories = categoryRepo.findAll();
+                List<Village> villages = villageRepo.findAll();
+
+                if (admin != null && !categories.isEmpty() && !villages.isEmpty()) {
+                    for (int i = 1; i <= 5; i++) {
+                        Report report = new Report();
+                        report.setTitle("Sample Issue #" + i);
+                        report.setDescription("This is a sample report description for issue " + i);
+                        report.setReporter(admin);
+                        report.setCategory(categories.get(i % categories.size()));
+                        report.setIncidentVillage(villages.get(i % villages.size()));
+                        report.setStatus("PENDING");
+                        report.setCurrentEscalationLevel(Report.EscalationLevel.AT_VILLAGE);
+
+                        // Make reports #1 and #2 OVERDUE (2 days ago)
+                        // Make others active (2 days from now)
+                        if (i <= 2) {
+                            report.setSlaDeadline(java.time.LocalDateTime.now().minusDays(2));
+                        } else {
+                            report.setSlaDeadline(java.time.LocalDateTime.now().plusDays(2));
+                        }
+
+                        reportRepo.save(report);
+                    }
+                    System.out.println("5 sample reports successfully seeded!");
+                }
             }
 
             // --- PHASE 2: SEED GEOGRAPHY ---
