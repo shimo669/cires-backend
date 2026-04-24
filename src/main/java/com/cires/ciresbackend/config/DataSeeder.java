@@ -83,10 +83,6 @@ public class DataSeeder {
                         config.setCategory(cat);
                         config.setLevelType(level);
                         
-                        SlaConfig config = new SlaConfig();
-                        config.setCategory(cat);
-                        config.setLevelType(level);
-                        
                         // Default durations: Village: 24h, Cell: 48h, Sector: 72h, etc.
                         int hours = switch (level) {
                             case VILLAGE -> 24;
