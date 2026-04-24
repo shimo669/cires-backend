@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/auth")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
@@ -183,6 +183,10 @@ public class AuthController {
             logger.warn("Login failed for username: {}. Error: {}", request.getUsername(), e.getMessage());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new ApiResponse<>(401, "Invalid username or password"));
+        } catch (Exception e) {
+            logger.error("Unexpected error during login for user: {}", request.getUsername(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ApiResponse<>(500, "An unexpected server error occurred: " + e.getMessage()));
         }
     }
 

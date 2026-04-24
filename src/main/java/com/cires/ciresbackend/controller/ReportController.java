@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/reports")
+@RequestMapping("/reports")
 @CrossOrigin("*")
 public class ReportController {
 
@@ -42,7 +42,7 @@ public class ReportController {
         } catch (Exception e) {
             logger.error("Report creation error: {}", e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(new ApiResponse<>(500, "Error creating report"));
+                    .body(new ApiResponse<>(500, "Error creating report: " + e.getMessage()));
         }
     }
 

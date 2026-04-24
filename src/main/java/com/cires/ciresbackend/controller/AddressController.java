@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/api/address", "/api/locations"})
+@RequestMapping({"/address", "/locations"})
 @RequiredArgsConstructor
 @CrossOrigin("*")
 public class AddressController {

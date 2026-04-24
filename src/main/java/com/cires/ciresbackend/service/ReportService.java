@@ -6,6 +6,8 @@ import com.cires.ciresbackend.dto.ReportDTO;
 import com.cires.ciresbackend.entity.*;
 import com.cires.ciresbackend.repository.*;
 import lombok.RequiredArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +27,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ReportService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ReportService.class);
+
     private final ReportRepository reportRepository;
     private final UserRepository userRepository;
     private final CategoryRepository categoryRepository;
@@ -36,15 +40,21 @@ public class ReportService {
 
     @Transactional
     public ReportDTO createReport(CreateReportRequest request, String username) {
+        logger.info("Attempting to create report for user: {} with categoryId: {} and locationId: {}", 
+                username, request.getCategoryId(), request.getIncidentLocationId());
+        
         // Get the reporter
         User reporter = userRepository.findByUsername(username)
                 .orElseThrow(() -> new IllegalArgumentException("User not found: " + username));
+        logger.info("Found reporter: {}", reporter.getUsername());
 
         // Get the category
         Category category = categoryRepository.findById(request.getCategoryId())
-                .orElseThrow(() -> new IllegalArgumentException("Category not found"));
+                .orElseThrow(() -> new IllegalArgumentException("Category not found with ID: " + request.getCategoryId()));
+        logger.info("Found category: {}", category.getCategoryName());
 
         Village incidentVillage = resolveIncidentVillage(request.getIncidentLocationId(), reporter);
+        logger.info("Resolved incident village: {}", incidentVillage.getName());
 
         // Create the report
         Report report = new Report();
@@ -61,14 +71,22 @@ public class ReportService {
         report.setStatus("PENDING");
         LocalDateTime deadline = resolveSlaDeadline(category.getId(), GovernmentLevelType.VILLAGE, request.getSlaDeadline());
         report.setSlaDeadline(deadline);
+        logger.info("Calculated SLA deadline: {}", deadline);
 
         Report savedReport = reportRepository.save(report);
+        logger.info("Report saved with ID: {}", savedReport.getId());
 
         upsertSlaTimer(savedReport, GovernmentLevelType.VILLAGE, deadline);
+        logger.info("SLA Timer upserted");
+
         writeHistory(savedReport, reporter, null, GovernmentLevelType.VILLAGE, "CREATED",
                 "Report created at village level");
+        logger.info("History record written");
 
-        return convertToDTO(savedReport);
+        ReportDTO dto = convertToDTO(savedReport);
+        logger.info("Converted to DTO successfully");
+        
+        return dto;
     }
 
     public List<ReportDTO> getMyReports(String username) {
@@ -140,8 +158,12 @@ public class ReportService {
         dto.setReporterUsername(report.getReporter() != null ? report.getReporter().getUsername() : "N/A");
 
         // Mapped to the strict village
-        dto.setIncidentLocationId(report.getIncidentVillage().getId());
-        dto.setIncidentLocationName(report.getIncidentVillage().getName() + " Village");
+        if (report.getIncidentVillage() != null) {
+            dto.setIncidentLocationId(report.getIncidentVillage().getId());
+            dto.setIncidentLocationName(report.getIncidentVillage().getName() + " Village");
+        } else {
+            dto.setIncidentLocationName("N/A");
+        }
 
         dto.setCreatedAt(report.getCreatedAt());
         dto.setSlaDeadline(isFinalizedReportStatus(report.getStatus()) ? null : report.getSlaDeadline());

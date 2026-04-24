@@ -22,7 +22,11 @@ public class DataSeeder {
             SectorRepository sectorRepo,
             CellRepository cellRepo,
             VillageRepository villageRepo,
-            CategoryRepository categoryRepo) {
+            CategoryRepository categoryRepo,
+            RoleRepository roleRepo,
+            UserRepository userRepo,
+            SlaConfigRepository slaConfigRepo,
+            org.springframework.security.crypto.password.PasswordEncoder passwordEncoder) {
         return args -> {
 
             // --- PHASE 1: SEED CATEGORIES ---
@@ -37,6 +41,62 @@ public class DataSeeder {
                     categoryRepo.save(category);
                 }
                 System.out.println("Default categories successfully seeded!");
+            }
+
+            // --- PHASE 1.5: SEED ROLES & ADMIN USER ---
+            if (roleRepo.count() == 0) {
+                System.out.println("Seeding default roles...");
+                Role adminRole = new Role(null, "ADMIN");
+                Role leaderRole = new Role(null, "LEADER");
+                Role citizenRole = new Role(null, "CITIZEN");
+                roleRepo.saveAll(List.of(adminRole, leaderRole, citizenRole));
+                System.out.println("Default roles successfully seeded!");
+            }
+
+            if (userRepo.count() == 0) {
+                System.out.println("Seeding default admin user...");
+                Role adminRole = roleRepo.findByRoleName("ADMIN")
+                        .orElseThrow(() -> new RuntimeException("Admin role not found"));
+
+                User admin = new User();
+                admin.setUsername("admin");
+                admin.setEmail("admin@cires.com");
+                admin.setPassword(passwordEncoder.encode("Admin123!"));
+                admin.setNationalId("1234567890123456");
+                admin.setRole(adminRole);
+                admin.setLevelType(User.UserLevelType.NATIONAL_ADMIN);
+                
+                userRepo.save(admin);
+                System.out.println("Default admin user successfully seeded! (admin / Admin123!)");
+            }
+
+            // --- PHASE 1.7: SEED SLA CONFIGURATIONS ---
+            if (slaConfigRepo.count() == 0) {
+                System.out.println("Seeding default SLA configurations...");
+                List<Category> categories = categoryRepo.findAll();
+                GovernmentLevelType[] levels = GovernmentLevelType.values();
+
+                for (Category cat : categories) {
+                    for (GovernmentLevelType level : levels) {
+                        SlaConfig config = new SlaConfig();
+                        config.setCategory(cat);
+                        config.setLevelType(level);
+                        
+                        // Default durations: Village: 24h, Cell: 48h, Sector: 72h, etc.
+                        int hours = switch (level) {
+                            case VILLAGE -> 24;
+                            case CELL -> 48;
+                            case SECTOR -> 72;
+                            case DISTRICT -> 120; // 5 days
+                            case PROVINCE -> 168; // 7 days
+                            case NATIONAL -> 240; // 10 days
+                        };
+                        
+                        config.setDurationHours(hours);
+                        slaConfigRepo.save(config);
+                    }
+                }
+                System.out.println("Default SLA configurations successfully seeded!");
             }
 
             // --- PHASE 2: SEED GEOGRAPHY ---

@@ -45,11 +45,12 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Make sure /api/address is permitAll so the registration form can load provinces
-                        .requestMatchers("/api/auth/**", "/api/address/**").permitAll()
-                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/api/leader/**").hasRole("LEADER")
-                        .requestMatchers("/api/citizen/**").hasRole("CITIZEN")
+                        // Make sure /address is permitAll so the registration form can load provinces
+                        .requestMatchers("/auth/**", "/address/**").permitAll()
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/leader/**").hasRole("LEADER")
+                        .requestMatchers("/citizen/**").hasRole("CITIZEN")
+                        .requestMatchers("/reports/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
