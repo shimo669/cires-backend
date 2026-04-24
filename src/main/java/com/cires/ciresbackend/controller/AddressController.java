@@ -10,9 +10,11 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping({"/address", "/locations"})
+// Updated to include /api prefix to match Frontend and SecurityConfig
+@RequestMapping({"/api/address", "/api/locations"})
 @RequiredArgsConstructor
-@CrossOrigin("*")
+// Specific origins are safer than "*" when using allowCredentials in SecurityConfig
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class AddressController {
 
     private final AddressService addressService;

@@ -4,12 +4,13 @@ import com.cires.ciresbackend.entity.User;
 import com.cires.ciresbackend.entity.Village;
 import com.cires.ciresbackend.repository.VillageRepository;
 import com.cires.ciresbackend.service.UserService;
-import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.*;
 
-@Controller
+// Changed from @Controller to @RestController to work with your React Frontend
+@RestController
+// Updated with /api prefix to align with SecurityConfig
+@RequestMapping("/api/users")
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class UserController {
 
     private final UserService userService;
@@ -20,17 +21,20 @@ public class UserController {
         this.villageRepository = villageRepository;
     }
 
-    @PostMapping("/register/save") // Must match register.html action
-    public String registerUser(@ModelAttribute User user, @RequestParam(required = false) Long locationId) {
+    // Updated path to /api/users/register/save
+    @PostMapping("/register/save")
+    public String registerUser(@RequestBody User user, @RequestParam(required = false) Long locationId) {
         if (locationId != null && user.getVillage() == null) {
             Village village = villageRepository.findById(locationId)
                     .orElseThrow(() -> new IllegalArgumentException("Village not found"));
             assignGeographyFromVillage(user, village);
         }
 
-        // Use the registerCitizen method which has the encoding logic
         userService.registerCitizen(user);
-        return "redirect:/login?success";
+
+        // Note: With @RestController, "redirect:" doesn't work the same way as @Controller.
+        // Usually, the Frontend handles the redirect after receiving a 200 OK.
+        return "User registered successfully";
     }
 
     private void assignGeographyFromVillage(User user, Village village) {

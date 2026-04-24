@@ -8,9 +8,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/admin")
+// Updated with /api prefix to match SecurityConfig and Frontend Axios
+@RequestMapping("/api/admin")
 @RequiredArgsConstructor
-@CrossOrigin("*")
+// Updated to specific origins for better security and credential support
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class AdminController {
 
     private final AdminService adminService;

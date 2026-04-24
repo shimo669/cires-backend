@@ -26,7 +26,9 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Optional;
 
 @RestController
-@RequestMapping("/auth")
+// Updated with /api prefix to align with SecurityConfig and Frontend Axios
+@RequestMapping("/api/auth")
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
@@ -163,7 +165,7 @@ public class AuthController {
 
             User user = userOpt.get();
             String role = user.getRole().getRoleName();
-            
+
             // Generate JWT token
             String token = jwtTokenProvider.generateTokenFromUsername(request.getUsername(), role);
 

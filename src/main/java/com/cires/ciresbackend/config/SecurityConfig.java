@@ -19,6 +19,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -45,12 +46,12 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        // Make sure /address is permitAll so the registration form can load provinces
-                        .requestMatchers("/auth/**", "/address/**").permitAll()
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
-                        .requestMatchers("/leader/**").hasRole("LEADER")
-                        .requestMatchers("/citizen/**").hasRole("CITIZEN")
-                        .requestMatchers("/reports/**").authenticated()
+                        // Added /api prefix to match your Frontend Axios requests
+                        .requestMatchers("/api/auth/**", "/api/address/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/leader/**").hasRole("LEADER")
+                        .requestMatchers("/api/citizen/**").hasRole("CITIZEN")
+                        .requestMatchers("/api/reports/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
@@ -61,11 +62,24 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // Add your frontend URL here
-        configuration.setAllowedOrigins(List.of("https://cires-frontend.onrender.com", "http://localhost:5173"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
-        configuration.setAllowCredentials(true); // Required for many auth setups
+
+        // Trusted origins for both Local and Production
+        configuration.setAllowedOrigins(Arrays.asList(
+                "https://cires-frontend.onrender.com",
+                "http://localhost:5173"
+        ));
+
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // Added "Accept" to allow Axios requests to pass through
+        configuration.setAllowedHeaders(Arrays.asList(
+                "Authorization",
+                "Content-Type",
+                "X-Requested-With",
+                "Accept"
+        ));
+
+        configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -8,9 +8,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/interactions")
+// Updated with /api prefix to stay consistent with your new standard
+@RequestMapping("/api/interactions")
 @RequiredArgsConstructor
-@CrossOrigin("*")
+// Specific origins for secure interaction handling
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class InteractionController {
 
     private final InteractionService interactionService;

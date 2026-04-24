@@ -12,8 +12,11 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/reports")
+// Updated with /api prefix to match SecurityConfig and Frontend Axios
+@RequestMapping("/api/reports")
 @RequiredArgsConstructor
+// Specific origins for secure authenticated report actions
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class ReportActionController {
 
     private final ReportActionService reportActionService;

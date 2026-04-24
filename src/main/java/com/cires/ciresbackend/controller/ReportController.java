@@ -15,8 +15,10 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/reports")
-@CrossOrigin("*")
+// Updated with /api prefix to match SecurityConfig and Frontend Axios
+@RequestMapping("/api/reports")
+// Specific origins are required to avoid CORS issues when using credentials/JWT
+@CrossOrigin(origins = {"https://cires-frontend.onrender.com", "http://localhost:5173"}, allowCredentials = "true")
 public class ReportController {
 
     private static final Logger logger = LoggerFactory.getLogger(ReportController.class);
@@ -129,4 +131,3 @@ public class ReportController {
         }
     }
 }
-
