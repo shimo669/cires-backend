@@ -117,17 +117,23 @@ public class DataSeeder {
                         report.setTitle("Sample Issue #" + i);
                         report.setDescription("This is a sample report description for issue " + i);
                         report.setReporter(admin);
-                        report.setCategory(categories.get(i % categories.size()));
+                        Category category = categories.get(i % categories.size());
+                        report.setCategory(category);
                         report.setIncidentVillage(villages.get(i % villages.size()));
                         report.setStatus("PENDING");
                         report.setCurrentEscalationLevel(Report.EscalationLevel.AT_VILLAGE);
 
-                        // Make reports #1 and #2 OVERDUE (2 days ago)
-                        // Make others active (2 days from now)
+                        // If it's a Health issue, use the 20-minute rule
+                        boolean isHealth = category.getCategoryName().equalsIgnoreCase("Health") || category.getCategoryName().equalsIgnoreCase("Santé");
+
                         if (i <= 2) {
-                            report.setSlaDeadline(java.time.LocalDateTime.now().minusDays(2));
+                            // Overdue: 2 days ago (or 30 mins ago if Health)
+                            int overdueMinutes = isHealth ? 30 : 2880; // 2880 = 2 days
+                            report.setSlaDeadline(java.time.LocalDateTime.now().minusMinutes(overdueMinutes));
                         } else {
-                            report.setSlaDeadline(java.time.LocalDateTime.now().plusDays(2));
+                            // Active: 2 days from now (or 10 mins from now if Health)
+                            int activeMinutes = isHealth ? 10 : 2880;
+                            report.setSlaDeadline(java.time.LocalDateTime.now().plusMinutes(activeMinutes));
                         }
 
                         reportRepo.save(report);
