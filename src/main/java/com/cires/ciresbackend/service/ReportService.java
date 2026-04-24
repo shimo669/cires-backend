@@ -393,7 +393,10 @@ public class ReportService {
 
     private LocalDateTime resolveSlaDeadline(Long categoryId, GovernmentLevelType levelType, LocalDateTime fallbackDeadline) {
         return slaConfigRepository.findByCategoryIdAndLevelType(categoryId, levelType)
-                .map(config -> LocalDateTime.now().plusMinutes(config.getDurationMinutes()))
+                .map(config -> {
+                    Integer minutes = config.getDurationMinutes();
+                    return LocalDateTime.now().plusMinutes(minutes != null ? minutes : 60);
+                })
                 .orElseGet(() -> fallbackDeadline != null ? fallbackDeadline : LocalDateTime.now().plusMinutes(60));
     }
 
