@@ -83,17 +83,21 @@ public class DataSeeder {
                         config.setCategory(cat);
                         config.setLevelType(level);
                         
-                        // Default durations: Village: 24h, Cell: 48h, Sector: 72h, etc.
-                        int hours = switch (level) {
-                            case VILLAGE -> 24;
-                            case CELL -> 48;
-                            case SECTOR -> 72;
-                            case DISTRICT -> 120; // 5 days
-                            case PROVINCE -> 168; // 7 days
-                            case NATIONAL -> 240; // 10 days
-                        };
-                        
-                        config.setDurationHours(hours);
+                        // Special case for Health category: 20 minutes
+                        if (cat.getCategoryName().equalsIgnoreCase("Health") || cat.getCategoryName().equalsIgnoreCase("Santé")) {
+                            config.setDurationMinutes(20);
+                        } else {
+                            // Default durations converted to minutes: Village: 24h, Cell: 48h, etc.
+                            int minutes = switch (level) {
+                                case VILLAGE -> 24 * 60;
+                                case CELL -> 48 * 60;
+                                case SECTOR -> 72 * 60;
+                                case DISTRICT -> 120 * 60;
+                                case PROVINCE -> 168 * 60;
+                                case NATIONAL -> 240 * 60;
+                            };
+                            config.setDurationMinutes(minutes);
+                        }
                         slaConfigRepo.save(config);
                     }
                 }
